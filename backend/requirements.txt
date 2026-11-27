@@ -1,0 +1,24 @@
+# Runtime dependencies (exact pins; upgrade deliberately and re-run the test suite).
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+sqlalchemy[asyncio]==2.1.9
+asyncpg==0.32.0
+alembic==1.20.1
+pydantic==2.14.4
+pydantic-settings==2.16.3
+email-validator==2.4.0
+pyjwt==2.15.1
+argon2-cffi==25.1.0
+
+# Speech recognition (Step 3). Model weights are downloaded at runtime into the
+# Hugging Face cache (or WHISPER_DOWNLOAD_ROOT), never into the repository.
+faster-whisper==1.2.1
+ctranslate2==4.9.1
+numpy==2.5.5
+indic-transliteration==2.3.83
+# PyAV (faster-whisper's audio decoder). 19.x removed av.open(metadata_errors=...),
+# which faster-whisper 1.2.1's decode_audio() still passes: keep < 19 until upstream fixes it.
+av==18.1.1
+
+# Real-time voice activity detection (Step 4). Maintained fork of WebRTC VAD with wheels.
+webrtcvad-wheels==2.0.14.post1

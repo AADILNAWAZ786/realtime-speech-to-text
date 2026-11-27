@@ -1,0 +1,62 @@
+# NOTE: directory patterns that could collide with source-code package names are
+# ANCHORED with a leading "/" so they only match one specific location.
+# (An unanchored "models/" once ignored backend/app/models/ - never do that again.)
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+/backend/build/
+/backend/dist/
+.venv/
+venv/
+.python-version
+
+# --- Tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Node / frontend (later steps) ---
+node_modules/
+/frontend/dist/
+/frontend/e2e-shots/
+/frontend/e2e-failure.png
+
+# --- Downloaded AI model weights (later steps) - anchored, NOT app/models/ ---
+/model_cache/
+/backend/model_cache/
+*.safetensors
+*.onnx.download
+
+# --- Audio (evaluation recordings are large / personal) ---
+*.wav
+!backend/tests/fixtures/**/*.wav
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Safety net: application source is never ignored ---
+!/backend/app/**/
+!/backend/app/**/*.py
+!/backend/alembic/**/*.py
+!/backend/tests/**/*.py
+!/backend/scripts/**/*.py
+/backend/blobs/
+/.github/workflows/
