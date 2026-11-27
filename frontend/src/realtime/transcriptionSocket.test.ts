@@ -157,6 +157,33 @@ describe("connection and authentication", () => {
     });
   });
 
+  it("explains a cloud speech provider that is unavailable or out of quota", async () => {
+    const a = setup();
+    const first = a.socket.connect();
+    a.ws().open();
+    a.ws().receive({ type: "error", code: "transcription_unavailable", message: "x", fatal: true });
+    a.ws().serverClose(1011);
+    await expect(first).rejects.toMatchObject({
+      code: "rejected",
+      serverCode: "transcription_unavailable",
+      message: expect.stringMatching(/speech recognition service is unavailable/i),
+    });
+
+    const b = await started();
+    b.ws().receive({
+      type: "error",
+      code: "transcription_quota_exceeded",
+      message: "x",
+      fatal: true,
+    });
+    b.ws().receive(sessionSaved({ status: "interrupted", end_reason: "provider_error" }));
+    expect(b.ends[0]).toMatchObject({
+      kind: "saved",
+      saved: { status: "interrupted", end_reason: "provider_error" },
+      error: { code: "transcription_quota_exceeded" },
+    });
+  });
+
   it("explains a refused origin and an existing recording", async () => {
     const a = setup();
     const first = a.socket.connect();

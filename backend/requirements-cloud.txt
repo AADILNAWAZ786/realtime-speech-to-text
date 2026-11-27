@@ -1,0 +1,24 @@
+# Cloud runtime (e.g. Render) for SPEECH_PROVIDER=gemini_live.
+#
+# Same exact pins as requirements.txt, WITHOUT the local Whisper stack: faster-whisper,
+# ctranslate2 and av (plus their onnxruntime / tokenizers / huggingface-hub dependencies)
+# are only imported lazily, inside the Whisper engine and the transcribe_file CLI, so the
+# app starts and serves gemini_live recordings without them. SPEECH_PROVIDER=whisper is NOT
+# supported with this file: use requirements.txt for local Whisper.
+#
+# Kept on purpose: numpy, webrtcvad-wheels and indic-transliteration are imported at module
+# level by the WebSocket pipeline (session types, output-script conversion).
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+sqlalchemy[asyncio]==2.1.9
+asyncpg==0.32.0
+alembic==1.20.1
+pydantic==2.14.4
+pydantic-settings==2.16.3
+email-validator==2.4.0
+pyjwt==2.15.1
+argon2-cffi==25.1.0
+numpy==2.5.5
+indic-transliteration==2.3.83
+webrtcvad-wheels==2.0.14.post1
+google-genai==3.6.1

@@ -22,6 +22,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limit import LoginRateLimiter
 from app.db.session import create_engine, create_session_factory
+from app.realtime.gemini_live import GeminiConnector
 from app.speech.engine import SpeechEngine
 from app.ws.persistence import RecordingStore
 from app.ws.routes import router as ws_router
@@ -31,9 +32,14 @@ logger = logging.getLogger(__name__)
 
 
 def create_app(
-    settings: Settings | None = None, *, speech_engine: SpeechEngine | None = None
+    settings: Settings | None = None,
+    *,
+    speech_engine: SpeechEngine | None = None,
+    gemini_connector: GeminiConnector | None = None,
 ) -> FastAPI:
-    """Build the application. `speech_engine` replaces the faster-whisper engine (tests)."""
+    """Build the application. The speech provider comes from SPEECH_PROVIDER (default
+    whisper). Tests inject `speech_engine` (replaces faster-whisper) or `gemini_connector`
+    (replaces the Google Gen AI SDK client)."""
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_json)
 
@@ -41,14 +47,16 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Starting %s (%s)", settings.app_name, settings.app_env.value)
         # Shared speech runtime: validates the CPU budget (raises -> startup fails).
-        runtime = SpeechRuntime.create(settings, engine=speech_engine)
+        runtime = SpeechRuntime.create(
+            settings, engine=speech_engine, gemini_connector=gemini_connector
+        )
         app.state.speech = runtime
         try:
             await app.state.recording_store.mark_stale_recordings_interrupted()
         except Exception as exc:  # DB may be down at boot; readiness reports it
             logger.warning("Could not check for stale recordings: %s", type(exc).__name__)
         if settings.speech_preload_model:
-            await runtime.preload()
+            await runtime.preload()  # Whisper only: Gemini has no local model
         try:
             yield
         finally:

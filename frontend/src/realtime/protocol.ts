@@ -95,7 +95,8 @@ export type EndReason =
   | "protocol_error"
   | "overloaded"
   | "shutdown"
-  | "internal_error";
+  | "internal_error"
+  | "provider_error"; // cloud speech provider (Gemini Live) failed mid-recording
 
 export interface SessionSaved {
   type: "session_saved";
@@ -126,7 +127,9 @@ export type ServerErrorCode =
   | "idle_timeout"
   | "server_shutdown"
   | "persistence_failed"
-  | "internal_error";
+  | "internal_error"
+  | "transcription_unavailable"
+  | "transcription_quota_exceeded";
 
 export interface ServerError {
   type: "error";
@@ -227,4 +230,7 @@ export const ERROR_CODE_MESSAGES: Partial<Record<ServerErrorCode, string>> = {
   server_shutdown: "The server is restarting, so the recording was stopped.",
   persistence_failed: "Some transcript segments could not be saved.",
   internal_error: "The transcription server had an internal error.",
+  transcription_unavailable:
+    "The speech recognition service is unavailable right now. Try again in a moment.",
+  transcription_quota_exceeded: "The speech recognition service is at capacity. Try again later.",
 };

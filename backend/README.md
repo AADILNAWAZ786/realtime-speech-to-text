@@ -49,7 +49,9 @@ backend/
 │   │   ├── buffer.py        #   frames, spans, pre-roll, utterance buffer
 │   │   ├── boundary.py      #   safe cuts, word-boundary carry, de-dup, hallucination filter
 │   │   ├── scheduler.py     #   InferenceScheduler (thread pool, FINAL > PARTIAL)
-│   │   ├── session.py       #   TranscriptionSession orchestrator
+│   │   ├── session.py       #   TranscriptionSession orchestrator (Whisper)
+│   │   ├── gemini_live.py   #   GeminiLiveSession (SPEECH_PROVIDER=gemini_live)
+│   │   ├── contract.py      #   RecordingSession interface both sessions implement
 │   │   └── events.py        #   transport-neutral session events
 │   ├── speech/              # speech engine (no web/DB dependencies)
 │   │   ├── audio.py         #   PCM16 / float validation & conversion, file loading
@@ -82,6 +84,14 @@ source .venv/bin/activate              # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt    # runtime only: requirements.txt
 cp .env.example .env                   # then fill in the values (see below)
 ```
+
+### Speech provider
+
+`SPEECH_PROVIDER` selects the recogniser. **`whisper`** (default) is local faster-whisper,
+with nothing else to configure. **`gemini_live`** is Google's Gemini Live API for cloud
+deployment: it needs `GEMINI_API_KEY` (a server-side secret) and can be installed from
+`requirements-cloud.txt`, which leaves out the Whisper stack. The browser protocol, storage
+and history are the same for both. See [`docs/speech-providers.md`](../docs/speech-providers.md).
 
 ### Database
 

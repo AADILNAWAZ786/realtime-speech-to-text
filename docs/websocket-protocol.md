@@ -102,7 +102,14 @@ Ends the recording normally. Any other text message after `start` is a protocol 
 was reached (`end_reason: recording_limit`). Otherwise `interrupted`.
 
 `end_reason`: `stopped`, `recording_limit`, `disconnected`, `idle_timeout`, `rate_limited`,
-`protocol_error`, `overloaded`, `shutdown`, `internal_error`.
+`protocol_error`, `overloaded`, `shutdown`, `internal_error`, and `provider_error` (only with
+`SPEECH_PROVIDER=gemini_live`: the cloud speech service failed mid-recording).
+
+With `SPEECH_PROVIDER=gemini_live` the messages and fields are the same. Differences:
+- `model_name` is `gemini:<model>`, and `max_duration_ms` is at most 600 000 (Gemini Live
+  sessions last at most 10 minutes).
+- `final.avg_logprob` is `null`, and utterance times may be approximate (see
+  `docs/speech-providers.md`).
 
 ## Errors and close codes
 
@@ -115,6 +122,9 @@ was reached (`end_reason: recording_limit`). Otherwise `interrupted`.
 | 1012 | `server_shutdown` | Server is restarting (recording saved as interrupted) |
 | 1013 | `server_busy` | Global limit `WS_MAX_ACTIVE_SESSIONS` reached |
 | 1013 | `server_overloaded` | Transcription backlog too large (all finals still saved) |
+| 1013 | `transcription_unavailable` | `gemini_live` only: the speech service is unreachable or failed (generic; no provider details) |
+| 1011 | `transcription_unavailable` | `gemini_live` only: the server's Gemini API key was rejected (a server configuration problem) |
+| 1013 | `transcription_quota_exceeded` | `gemini_live` only: the speech service's rate limit or quota is exhausted |
 | 4400 | `invalid_message` / `invalid_audio` | Malformed JSON, wrong audio format, unexpected message, odd or empty frame |
 | 4401 | `auth_required` / `invalid_token` / `token_expired` | Audio or `stop` before `start`, bad or expired JWT |
 | 4408 | `auth_timeout` / `idle_timeout` | No `start` in time, or nothing received for `WS_IDLE_TIMEOUT_SECONDS` |

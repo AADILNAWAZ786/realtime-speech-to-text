@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -110,6 +110,27 @@ class RecordingStore:
                 )
 
         await self._with_retries(operation, what="finish recording")
+
+    async def discard_recording(self, transcription_id: uuid.UUID) -> bool:
+        """Delete a recording that never started streaming (the speech provider could not
+        be reached). Only an empty recording still in 'recording' status is removed;
+        anything with saved segments is kept. Returns True if a row was deleted."""
+
+        async def operation() -> bool:
+            async with self._sessions() as session, session.begin():
+                has_segments = exists().where(
+                    TranscriptionSegment.transcription_id == transcription_id
+                )
+                result = await session.execute(
+                    delete(Transcription).where(
+                        Transcription.id == transcription_id,
+                        Transcription.status == TranscriptionStatus.RECORDING,
+                        ~has_segments,
+                    )
+                )
+                return bool(getattr(result, "rowcount", 0))
+
+        return await self._with_retries(operation, what="discard recording")
 
     async def mark_stale_recordings_interrupted(self) -> int:
         """After a crash/restart no recording can still be live: close leftovers."""

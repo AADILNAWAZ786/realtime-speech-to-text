@@ -60,3 +60,8 @@ Thumbs.db
 !/backend/scripts/**/*.py
 /backend/blobs/
 /.github/workflows/
+
+# Local Hugging Face Whisper model cache
+/backend/.locks/
+/backend/models--Systran--faster-whisper-small/
+/backend/CACHEDIR.TAG

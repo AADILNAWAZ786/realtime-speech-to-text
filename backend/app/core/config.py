@@ -10,7 +10,7 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _MIN_SECRET_LENGTH = 32
@@ -23,6 +23,18 @@ class Environment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
     PRODUCTION = "production"
+
+
+class SpeechProvider(StrEnum):
+    """Who turns the recording's audio into text (SPEECH_PROVIDER)."""
+
+    WHISPER = "whisper"  # local faster-whisper (default): VAD, scheduler, WHISPER_* settings
+    GEMINI_LIVE = "gemini_live"  # Google Gemini Live API (cloud): needs GEMINI_API_KEY
+
+
+# Gemini Live Transcribe allows at most 10 minutes of continuous streaming per session.
+GEMINI_LIVE_MAX_SESSION_SECONDS = 600
+_GEMINI_KEY_PLACEHOLDERS = frozenset({"your-gemini-api-key", "changeme", "replace-me", "xxx"})
 
 
 class Settings(BaseSettings):
@@ -94,6 +106,25 @@ class Settings(BaseSettings):
         default=False, description="Load the Whisper model at startup instead of first use"
     )
 
+    # --- Speech provider ---
+    speech_provider: SpeechProvider = SpeechProvider.WHISPER
+    # Server-side secret: never sent to the browser, logged, or included in error messages.
+    gemini_api_key: SecretStr | None = None
+    gemini_live_model: str = Field(default="gemini-3.5-transcribe-live", min_length=1)
+    gemini_max_session_seconds: int = Field(
+        default=GEMINI_LIVE_MAX_SESSION_SECONDS,
+        ge=10,
+        le=GEMINI_LIVE_MAX_SESSION_SECONDS,
+        description="Recording limit with Gemini Live (its sessions last at most 10 minutes)",
+    )
+    gemini_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    gemini_finalize_timeout_seconds: float = Field(
+        default=10.0,
+        gt=0,
+        le=60,
+        description="After the last audio: how long to wait for Gemini's pending finals",
+    )
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:
@@ -118,6 +149,23 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _validate_speech_provider(self) -> Settings:
+        if self.speech_provider is SpeechProvider.GEMINI_LIVE:
+            key = self.gemini_api_key.get_secret_value().strip() if self.gemini_api_key else ""
+            if not key:
+                raise ValueError("GEMINI_API_KEY is required when SPEECH_PROVIDER=gemini_live")
+            if key.lower() in _GEMINI_KEY_PLACEHOLDERS:
+                raise ValueError("GEMINI_API_KEY looks like a placeholder; set the real key")
+        return self
+
+    @property
+    def max_recording_seconds(self) -> int:
+        """Recording limit of the active provider (Whisper keeps WS_MAX_RECORDING_SECONDS)."""
+        if self.speech_provider is SpeechProvider.GEMINI_LIVE:
+            return min(self.ws_max_recording_seconds, self.gemini_max_session_seconds)
+        return self.ws_max_recording_seconds
 
     @property
     def is_production(self) -> bool:

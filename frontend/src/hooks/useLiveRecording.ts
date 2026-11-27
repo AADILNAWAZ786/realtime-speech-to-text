@@ -276,6 +276,10 @@ function describeServerError(code: string, fallback: string): string {
       return "Audio reached the server faster than real time, so the recording was stopped.";
     case "frame_too_large":
       return "An audio frame was too large for the server (close code 1009), so the recording was stopped.";
+    case "transcription_unavailable":
+      return "The speech recognition service stopped responding, so the recording was stopped. Everything transcribed before that was saved.";
+    case "transcription_quota_exceeded":
+      return "The speech recognition service reached its usage limit, so the recording was stopped. Everything transcribed before that was saved.";
     default:
       return fallback;
   }

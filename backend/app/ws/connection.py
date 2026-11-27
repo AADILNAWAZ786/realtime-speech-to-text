@@ -35,6 +35,7 @@ from starlette.websockets import WebSocketState
 from app.core.config import Settings
 from app.core.exceptions import AuthenticationError
 from app.models.enums import ScriptPreference, TranscriptionStatus
+from app.realtime.contract import ProviderFailure, RecordingSession, SpeechProviderError
 from app.realtime.endpointer import CommitReason
 from app.realtime.events import (
     FinalTranscript,
@@ -50,7 +51,6 @@ from app.realtime.session import (
     SessionClosedError,
     SessionOverloadedError,
     SessionState,
-    TranscriptionSession,
 )
 from app.services.auth_service import AuthService
 from app.speech.errors import AudioValidationError
@@ -82,6 +82,7 @@ class EndReason(StrEnum):
     OVERLOADED = "overloaded"
     SHUTDOWN = "shutdown"
     INTERNAL_ERROR = "internal_error"
+    PROVIDER_ERROR = "provider_error"  # the cloud speech provider failed mid-recording
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,16 @@ def _ending(
         close_code=close_code,
         error=error,
     )
+
+
+def provider_error(failure: ProviderFailure) -> tuple[ErrorCode, CloseCode]:
+    """Client-safe error for a speech provider failure. A rejected API key is a server
+    configuration problem: the client only learns that the service is unavailable."""
+    if failure is ProviderFailure.QUOTA:
+        return ErrorCode.TRANSCRIPTION_QUOTA_EXCEEDED, CloseCode.TRY_AGAIN_LATER
+    if failure is ProviderFailure.AUTH:
+        return ErrorCode.TRANSCRIPTION_UNAVAILABLE, CloseCode.INTERNAL_ERROR
+    return ErrorCode.TRANSCRIPTION_UNAVAILABLE, CloseCode.TRY_AGAIN_LATER
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,7 +222,7 @@ async def handle_transcribe(websocket: WebSocket) -> None:
                 title=start.title or _default_title(),
                 speech_mode=start.speech_mode,
                 script_preference=start.script_preference,
-                model_name=runtime.engine.info.model_name,
+                model_name=runtime.model_name,
             )
         except Exception:
             logger.exception("Could not create the recording")
@@ -227,6 +238,15 @@ async def handle_transcribe(websocket: WebSocket) -> None:
             transcription_id=transcription_id,
             start=start,
         )
+        try:
+            await connection.session.open()  # Gemini: connect now; Whisper: no-op
+        except SpeechProviderError as exc:
+            # Nothing was streamed: remove the empty recording so failed attempts do not
+            # fill the history, then tell the client (generic message only).
+            with contextlib.suppress(Exception):
+                await store.discard_recording(transcription_id)
+            await _reject(websocket, ProtocolError(*provider_error(exc.failure)))
+            return
         lease.attach(connection)
         # The pipeline runs in its own task that owns the slot: if this handler is
         # cancelled (server-side cancellation, abrupt shutdown), the recording still
@@ -266,11 +286,10 @@ class RecordingConnection:
 
         self._events: asyncio.Queue[SessionEvent] = asyncio.Queue()
         self._outbound: asyncio.Queue[dict[str, Any] | _Close] = asyncio.Queue()
-        self.session = TranscriptionSession(
-            engine=runtime.engine,
-            scheduler=runtime.scheduler,
+        # Whisper (TranscriptionSession) or Gemini Live (GeminiLiveSession), per
+        # SPEECH_PROVIDER. Both emit the same events into this connection's pipeline.
+        self.session: RecordingSession = runtime.new_session(
             mode=start.speech_mode,
-            config=runtime.realtime,
             on_event=self._events.put_nowait,  # sync callback -> async pipeline
             session_id=str(transcription_id),
         )
@@ -340,9 +359,9 @@ class RecordingConnection:
                     transcription_id=self.transcription_id,
                     speech_mode=self._speech_mode,
                     script_preference=self._script,
-                    model_name=self._runtime.engine.info.model_name,
+                    model_name=self._runtime.model_name,
                     max_frame_bytes=self._settings.ws_max_frame_bytes,
-                    max_duration_ms=self._settings.ws_max_recording_seconds * 1000,
+                    max_duration_ms=self._runtime.max_recording_seconds * 1000,
                 )
             )
             self._receive_task = asyncio.create_task(self._receive_loop())
@@ -423,6 +442,9 @@ class RecordingConnection:
             return _ending(EndReason.RATE_LIMITED, CloseCode.RATE_LIMITED, ErrorCode.RATE_LIMITED)
         try:
             await self.session.feed(data)
+        except SpeechProviderError as exc:  # before SessionClosedError: it is a subclass
+            code, close = provider_error(exc.failure)
+            return _ending(EndReason.PROVIDER_ERROR, close, code)
         except SessionOverloadedError:
             return _ending(
                 EndReason.OVERLOADED, CloseCode.TRY_AGAIN_LATER, ErrorCode.SERVER_OVERLOADED

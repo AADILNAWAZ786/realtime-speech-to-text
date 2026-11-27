@@ -203,6 +203,9 @@ class TranscriptionSession:
         inflight = self._final_inflight.span.duration_ms if self._final_inflight else 0
         return queued + inflight
 
+    async def open(self) -> None:
+        """Nothing to connect for local inference (RecordingSession contract)."""
+
     async def feed(self, pcm16: bytes | bytearray | memoryview) -> None:
         """Process one chunk of 16 kHz mono PCM16 audio (any size)."""
         if self._state is not SessionState.OPEN:

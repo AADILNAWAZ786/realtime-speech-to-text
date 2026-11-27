@@ -52,6 +52,10 @@ class ErrorCode(StrEnum):
     SERVER_SHUTDOWN = "server_shutdown"
     PERSISTENCE_FAILED = "persistence_failed"
     INTERNAL_ERROR = "internal_error"
+    # Cloud speech provider (SPEECH_PROVIDER=gemini_live). Deliberately generic: the
+    # client never learns provider details, credentials or exception text.
+    TRANSCRIPTION_UNAVAILABLE = "transcription_unavailable"
+    TRANSCRIPTION_QUOTA_EXCEEDED = "transcription_quota_exceeded"
 
 
 # Generic, client-safe messages: never include exception text, tokens or internals.
@@ -71,6 +75,10 @@ ERROR_MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.SERVER_SHUTDOWN: "Server is restarting; recording stopped",
     ErrorCode.PERSISTENCE_FAILED: "Some transcript segments could not be saved",
     ErrorCode.INTERNAL_ERROR: "Internal server error",
+    ErrorCode.TRANSCRIPTION_UNAVAILABLE: "The speech recognition service is unavailable",
+    ErrorCode.TRANSCRIPTION_QUOTA_EXCEEDED: (
+        "The speech recognition service is at capacity; try again later"
+    ),
 }
 
 
