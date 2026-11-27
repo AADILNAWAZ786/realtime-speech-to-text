@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: realtime-speech-to-text
+    runtime: python
+    plan: free
+    region: ohio
+    branch: feature/gemini-live
+    rootDir: backend
+
+    buildCommand: pip install -r requirements-cloud.txt
+
+    startCommand: >-
+      alembic upgrade head &&
+      uvicorn app.main:create_app --factory
+      --host 0.0.0.0
+      --port $PORT
+      --ws websockets-sansio
+      --ws-max-size 65536
+
+    healthCheckPath: /api/v1/health/ready
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_JSON
+        value: "true"
+      - key: DOCS_ENABLED
+        value: "false"
+
+      - key: SPEECH_PROVIDER
+        value: gemini_live
+      - key: GEMINI_LIVE_MODEL
+        value: gemini-3.5-transcribe-live
+      - key: GEMINI_MAX_SESSION_SECONDS
+        value: "600"
+      - key: GEMINI_CONNECT_TIMEOUT_SECONDS
+        value: "10"
+      - key: GEMINI_FINALIZE_TIMEOUT_SECONDS
+        value: "10"
+
+      - key: SPEECH_PRELOAD_MODEL
+        value: "false"
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "1"
+      - key: WS_MAX_ACTIVE_SESSIONS
+        value: "1"
+
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://realtime-speech-to-text-2uc.pages.dev,https://ae9168d1.realtime-speech-to-text-2uc.pages.dev"
+
+      - key: JWT_SECRET_KEY
+        generateValue: true
+
+      - key: DATABASE_URL
+        sync: false
+
+      - key: GEMINI_API_KEY
+        sync: false
